@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "main.py",    // Your main Python file with the FastAPI app and Mangum handler
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",     // Match all routes
+      "dest": "main.py"   // Forward all matched routes to your Python file
+    }
+  ]
+}
